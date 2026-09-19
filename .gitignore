@@ -1,0 +1,6 @@
+node_modules/
+.next/
+.sites-runtime/
+*.log
+.vercel
+.env*.local
