@@ -30,7 +30,8 @@ export default function Home(){
   }
   function turn(deltaAngle, deltaElevation = 0){
     const s=state.current;
-    const angle=cameraPose(s.method,s.progress,s.angle,s.elevation).angle+deltaAngle;
+    const pose=cameraPose(s.method,s.progress,s.angle,s.elevation);
+    const angle=pose.angle+deltaAngle;
     const minElev=-0.16, maxElev=0.95;
     const nextElev=Math.max(minElev,Math.min(maxElev,s.elevation+deltaElevation));
     const isOrbit=s.method==='orbit_right'||s.method==='orbit_left'||s.method==='orbit';
@@ -157,8 +158,9 @@ export default function Home(){
     }
   }
   const method=METHODS.find(m=>m.id===view.method);
-  const degrees=((cameraPose(view.method,view.progress,view.angle,view.elevation).angle*180/Math.PI)%360+360)%360;
-  const pitchDeg=Math.round(view.elevation*180/Math.PI);
+  const pose=cameraPose(view.method,view.progress,view.angle,view.elevation);
+  const degrees=((pose.angle*180/Math.PI)%360+360)%360;
+  const livePitchDeg=Math.round((pose.elevation??view.elevation)*180/Math.PI);
   const framingLabel=Math.abs(view.panX||0)<0.2?'중앙':(view.panX||0)>0?'좌측 1/3':'우측 1/3';
   const preset=PRESETS.find(p=>p.id===view.preset);
   const status=view.method==='fixed'?'고정 구도':view.adjusted?'방향 설정됨':view.playing?'재생 중':view.progress>=1?'재생 완료':'일시정지';
@@ -189,13 +191,15 @@ export default function Home(){
             )}
             {(!ready||error)&&<div className="stage-notice" role={error?'alert':'status'}><p>{error||'장면을 준비하고 있어요.'}</p>{error&&<button onClick={()=>setRetry(r=>r+1)}>다시 불러오기</button>}</div>}
           </div>
-          <div className="viewer-caption"><span>{entered?'↔ ↕ 회전 · 우클릭 좌우 이동 · 휠 줌':'의자에 앉아 책을 읽는 인물'}</span><span className="mono">{entered?`${Math.round(degrees)}° / ${pitchDeg>=0?'+':''}${pitchDeg}° · ${framingLabel} · ${(view.zoom||1.0).toFixed(1)}x`:'16 : 9'}</span></div>
+          <div className="viewer-caption"><span>{entered?'↔ ↕ 회전 · 우클릭 좌우 이동 · 휠 줌':'의자에 앉아 책을 읽는 인물'}</span><span className="mono">{entered?`${Math.round(degrees)}° / ${livePitchDeg>=0?'+':''}${livePitchDeg}° · ${framingLabel} · ${(view.zoom||1.0).toFixed(1)}x`:'16 : 9'}</span></div>
           {entered&&<div className="transport"><div className="transport-top"><span className="status" role="status">{status}</span><span className="mono">{method.duration?`${(view.progress*method.duration).toFixed(1)} / ${method.duration.toFixed(1)} s`:'— / —'}</span></div><div className="progress" role="progressbar" aria-label="촬영 재생 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(view.progress*100)}><span style={{width:`${view.progress*100}%`}}/></div>{method.duration>0?<div className="play-controls"><button disabled={!ready||!!error} onClick={()=>view.progress>=1||view.adjusted?restart():commit({playing:!view.playing})}>{view.playing?'Ⅱ 일시정지':view.adjusted?'▷ 이 방향에서 재생':view.progress>=1?'▷ 다시 재생':'▷ 계속 재생'}</button><button disabled={!ready||!!error} className="text-button" onClick={restart}>↺ 처음부터</button></div>:<p className="fixed-note">카메라는 멈춰 있어요. 다른 각도를 선택하거나 장면을 돌려보세요.</p>}</div>}
         </section>
         {entered?<aside className="controls">
           <div className="control-heading"><span className="section-number">01</span><h2>촬영 방법</h2><span className="control-count">{METHODS.length} METHODS</span></div>
-          <div className="methods">{METHODS.map((m,i)=><button disabled={!ready||!!error} key={m.id} aria-pressed={view.method===m.id} className={`method ${view.method===m.id?'selected':''}`} onClick={()=>chooseMethod(m.id)}><span className="method-glyph" aria-hidden="true">{m.glyph}</span><span><strong>{m.name}</strong><small>{m.english}</small></span><span className="method-end">{view.method===m.id?'✓':`0${i+1}`}</span></button>)}</div>
-          <p className="method-description">{method.description}</p>
+          <div className="methods">{METHODS.map((m,i)=><button disabled={!ready||!!error} key={m.id} aria-pressed={view.method===m.id} className={`method ${view.method===m.id?'selected':''}`} onClick={()=>chooseMethod(m.id)}><span className="method-glyph" aria-hidden="true">{m.glyph}</span><span><strong>{m.name}</strong><small>{m.english}</small></span><span className="method-end">{view.method===m.id?'✓':(i+1).toString().padStart(2,'0')}</span></button>)}</div>
+          <div className="method-description-box">
+            <p className="method-description">{method.description}</p>
+          </div>
           <div className="control-heading preset-heading"><span className="section-number">02</span><h2>시작 각도</h2></div>
           <div className="presets">{PRESETS.map(p=><button disabled={!ready||!!error} key={p.id} aria-pressed={view.preset===p.id} className={view.preset===p.id?'selected':''} onClick={()=>choosePreset(p)}>{p.name}</button>)}</div>
           <p className="view-note">{preset?preset.name:'직접 설정한 방향'} · 360° 및 상하 각도 조절 가능</p>
@@ -228,10 +232,11 @@ export default function Home(){
           </div>
           <p className="view-note">0.5x(광각) ↔ 3.0x(망원) · 휠 스크롤 또는 슬라이더로 조절</p>
           <div className="scene-note"><span className="eyebrow">ONE SCENE, MANY WAYS TO SEE</span><p>인물과 공간은 그대로.<br/>바뀌는 건 카메라뿐입니다.</p></div>
-        </aside>:<aside className="intro-panel"><span className="section-number">01 / CAMERA EXPERIMENT</span><h2>어디서,<br/>어떻게 바라볼까요?</h2><p>책을 읽는 인물과 작은 공간.<br/>카메라를 가까이, 멀리, 주변으로<br className="desktop-break"/> 움직이며 구도를 확인해 보세요.</p><div className="intro-tags"><span>고정 각도 4개</span><span>이동 촬영 4종</span><span>사이드 프레이밍</span><span>자유 시점 및 줌</span></div><button className="primary" disabled={!ready||!!error} onClick={()=>setEntered(true)}>촬영 방법 둘러보기 <span>↗</span></button><p className="intro-hint">직접 누르고, 돌려보며 이해하는 촬영</p></aside>}
+        </aside>:<aside className="intro-panel"><span className="section-number">01 / CAMERA EXPERIMENT</span><h2>어디서,<br/>어떻게 바라볼까요?</h2><p>책을 읽는 인물과 작은 공간.<br/>카메라를 가까이, 멀리, 주변으로<br className="desktop-break"/> 움직이며 구도를 확인해 보세요.</p><div className="intro-tags"><span>고정 각도 4개</span><span>이동 촬영 9종</span><span>사이드 프레이밍</span><span>자유 시점 및 줌</span></div><button className="primary" disabled={!ready||!!error} onClick={()=>setEntered(true)}>촬영 방법 둘러보기 <span>↗</span></button><p className="intro-hint">직접 누르고, 돌려보며 이해하는 촬영</p></aside>}
       </div>
     </section>
     <footer><span>가상 장면 · 구도 이해를 위한 시연용 애니메이션</span><span>SHOT LAB / 첫 번째 장면</span></footer>
   </main>;
 }
+
 

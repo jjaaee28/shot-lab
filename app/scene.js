@@ -75,17 +75,42 @@ export const PRESETS = [
   { id:'low', name:'낮은 위치', angle:0, elevation:-.12 },
 ];
 export const METHODS = [
-  { id:'fixed', name:'고정 촬영', english:'STATIC', glyph:'⊡', description:'선택한 위치에서 가만히 바라봅니다.', duration:0 },
-  { id:'in', name:'달리 인', english:'DOLLY IN', glyph:'↗', description:'카메라가 다가가며 인물이 크게 보입니다.', duration:5 },
-  { id:'out', name:'달리 아웃', english:'DOLLY OUT', glyph:'↙', description:'카메라가 멀어지며 주변 공간이 드러납니다.', duration:5 },
-  { id:'orbit_right', name:'주변 돌기 (우)', english:'ORBIT RIGHT', glyph:'⟳', description:'인물을 바라보며 오른쪽으로 360° 한 바퀴 돕니다.', duration:10 },
-  { id:'orbit_left', name:'주변 돌기 (좌)', english:'ORBIT LEFT', glyph:'⟲', description:'인물을 바라보며 왼쪽으로 360° 한 바퀴 돕니다.', duration:10 },
+  { id:'fixed',       name:'고정 촬영',     english:'STATIC',      glyph:'⊡', description:'선택한 위치에서 카메라가 멈춰 장면을 바라봅니다. 인물의 표정이나 공간 분위기를 차분하게 전달할 때 씁니다.', duration:0 },
+  { id:'in',          name:'달리 인',       english:'DOLLY IN',    glyph:'↗', description:'카메라가 앞으로 이동해 인물에 가까워집니다. 집중감·긴장감을 높이거나 감정을 강조할 때 씁니다.', duration:5 },
+  { id:'out',         name:'달리 아웃',     english:'DOLLY OUT',   glyph:'↙', description:'카메라가 뒤로 물러나며 인물과 주변 공간이 함께 드러납니다. 고립감·여운을 표현할 때 씁니다.', duration:5 },
+  { id:'orbit_right', name:'주변 돌기 (우)', english:'ORBIT CW',   glyph:'⟳', description:'인물을 중심으로 오른쪽(시계 방향)으로 360° 한 바퀴 돌며 촬영합니다. 인물을 입체적으로 보여줄 때 씁니다.', duration:10 },
+  { id:'orbit_left',  name:'주변 돌기 (좌)', english:'ORBIT CCW',  glyph:'⟲', description:'인물을 중심으로 왼쪽(반시계 방향)으로 360° 한 바퀴 돌며 촬영합니다.', duration:10 },
+  { id:'tilt_up',     name:'틸트 업',       english:'TILT UP',     glyph:'↑', description:'카메라 위치는 고정한 채 렌즈 각도를 아래에서 위로 올립니다. 웅장함·상승감을 표현할 때 씁니다.', duration:5 },
+  { id:'tilt_down',   name:'틸트 다운',     english:'TILT DOWN',   glyph:'↓', description:'카메라 위치는 고정한 채 렌즈 각도를 위에서 아래로 내립니다. 압박감·내려보는 시선을 표현합니다.', duration:5 },
+  { id:'crane_up',    name:'크레인 업',     english:'CRANE UP',    glyph:'⤴', description:'카메라가 공중으로 높이 올라가며 장면 전체를 내려다봅니다. 장대한 스케일·신의 시점을 보여줄 때 씁니다.', duration:7 },
+  { id:'boom_down',   name:'붐 다운',       english:'BOOM DOWN',   glyph:'⤵', description:'카메라가 높은 곳에서 아래로 내려오며 인물에게 다가갑니다. 장면에 집중을 유도할 때 씁니다.', duration:7 },
 ];
 export function cameraPose(method, progress, angle, elevation) {
   const t=Math.max(0,Math.min(1,progress));
-  const radius=method==='in'?6.2-2.9*t:method==='out'?3.3+2.9*t:5.0;
+  // Dolly: radius changes, elevation fixed
   const isOrbit=method==='orbit_right'||method==='orbit_left'||method==='orbit';
   const orbitDir=method==='orbit_left'?-1:1;
   const azimuth=angle+(isOrbit?orbitDir*t*Math.PI*2:0);
-  return { angle:azimuth, radius, position:[Math.sin(azimuth)*radius*Math.cos(elevation),1.12+Math.sin(elevation)*radius,Math.cos(azimuth)*radius*Math.cos(elevation)] };
+  // Tilt: camera position fixed, elevation angle changes over time
+  let elev=elevation;
+  if(method==='tilt_up')   elev=elevation+t*0.62;   // tilt up ~35deg
+  if(method==='tilt_down') elev=elevation-t*0.45;   // tilt down ~25deg, clamped
+  elev=Math.max(-0.18,Math.min(1.05,elev));
+  // Crane/Boom: camera height changes (elevation shifts substantially)
+  let radius=method==='in'?6.2-2.9*t:method==='out'?3.3+2.9*t:5.0;
+  let craneElev=elev;
+  if(method==='crane_up')  craneElev=elevation+t*0.85;  // rise from start elev up high
+  if(method==='boom_down') craneElev=(elevation+0.80)-t*0.80; // descend from high to start
+  craneElev=Math.max(-0.18,Math.min(1.05,craneElev));
+  const finalElev=(method==='crane_up'||method==='boom_down')?craneElev:elev;
+  return {
+    angle: azimuth,
+    radius,
+    elevation: finalElev,
+    position: [
+      Math.sin(azimuth)*radius*Math.cos(finalElev),
+      1.12+Math.sin(finalElev)*radius,
+      Math.cos(azimuth)*radius*Math.cos(finalElev)
+    ]
+  };
 }
