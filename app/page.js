@@ -11,7 +11,10 @@ export default function Home(){
   const [libraryPage,setLibraryPage]=useState(false);
   const [savedShots,setSavedShots]=useState([
     {id:'sample-static',title:'창가의 정면',method:'fixed',angle:0,elevation:0,zoom:1,panX:0,panY:0,preset:'front'},
-    {id:'sample-arc',title:'인물을 도는 시선',method:'orbit_right',angle:Math.PI/2,elevation:0,zoom:1.2,panX:0,panY:0,preset:'side'}
+    {id:'sample-arc',title:'인물을 도는 시선',method:'orbit_right',angle:Math.PI/2,elevation:0,zoom:1.2,panX:0,panY:0,preset:'side'},
+    {id:'sample-dolly',title:'책장으로 다가가기',method:'in',angle:0,elevation:0,zoom:1.5,panX:0.5,panY:0,preset:'front'},
+    {id:'sample-tilt',title:'시선을 올려 보는 순간',method:'tilt_up',angle:Math.PI/2,elevation:0.2,zoom:1,panX:0,panY:-0.4,preset:'side'},
+    {id:'sample-low',title:'낮은 시선의 독서',method:'fixed',angle:0,elevation:-0.12,zoom:1.2,panX:-0.5,panY:0.5,preset:'low'}
   ]);
   const [scriptText,setScriptText]=useState('INT. 작은 방 - 오후\n\n창가에 앉은 인물이 책장을 넘긴다.\n카메라는 인물의 옆을 천천히 지나간다.');
   const [demoLoading,setDemoLoading]=useState(false);
