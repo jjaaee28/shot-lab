@@ -6,6 +6,9 @@ import { buildScene, cameraPose, METHODS, PRESETS } from './scene';
 const INITIAL={method:'fixed',angle:0,elevation:0,zoom:1.0,panX:0,panY:0,guide:false,progress:0,playing:false,preset:'front',adjusted:false};
 export default function Home(){
   const [entered,setEntered]=useState(false);
+  const [scriptPage,setScriptPage]=useState(false);
+  const [scriptText,setScriptText]=useState('INT. 작은 방 - 오후\n\n창가에 앉은 인물이 책장을 넘긴다.\n카메라는 인물의 옆을 천천히 지나간다.');
+  const [demoLoading,setDemoLoading]=useState(false);
   const [view,setView]=useState({...INITIAL});
   const state=useRef({...INITIAL});
   const mount=useRef(null);
@@ -39,6 +42,9 @@ export default function Home(){
     commit({angle:angle-(isOrbit?orbitDir*s.progress*Math.PI*2:0),elevation:nextElev,playing:false,preset:'custom',adjusted:s.method!=='fixed'});
   }
   function restart(){const s=state.current;commit({angle:s.adjusted?cameraPose(s.method,s.progress,s.angle,s.elevation).angle:s.angle,progress:0,playing:true,adjusted:false});}
+  function openScript(){setEntered(false);setScriptPage(true);}
+  function openIntro(){setEntered(false);setScriptPage(false);commit({...INITIAL});}
+  function drawDemo(){setDemoLoading(true);window.setTimeout(()=>{setDemoLoading(false);setScriptPage(false);setEntered(true);commit({...INITIAL,method:'orbit_right',playing:true});},700);}
   useEffect(()=>{
     const context=document.modelContext;
     if(!context?.registerTool)return;
@@ -169,9 +175,10 @@ export default function Home(){
   const preset=PRESETS.find(p=>p.id===view.preset);
   const status=view.method==='fixed'?'고정 구도':view.adjusted?'방향 설정됨':view.playing?'재생 중':view.progress>=1?'재생 완료':'일시정지';
   return <main>
+    <style jsx global>{` .script-panel{padding:16px 0}.script-panel-label{display:flex;justify-content:space-between;align-items:center;gap:12px}.demo-badge{font:11px 'Courier New',monospace;border:1px solid var(--ink);padding:4px 7px}.script-panel h2{font-size:28px;line-height:1.45;letter-spacing:-1px;font-weight:500;margin:25px 0 16px}.script-help{font-size:14px;line-height:1.8;margin-bottom:24px}.script-label{display:block;font:12px 'Courier New',monospace;letter-spacing:1px;margin-bottom:8px}.script-panel textarea{display:block;width:100%;min-height:190px;resize:vertical;background:transparent;color:var(--ink);border:1px solid var(--ink);padding:14px;font:14px/1.8 'Courier New','Malgun Gothic',monospace;outline:none}.script-panel textarea:focus{box-shadow:inset 0 0 0 2px var(--ink)}.script-meta{display:flex;justify-content:space-between;font:11px 'Courier New',monospace;margin:8px 0 18px}.script-back{width:100%;margin-top:8px;text-align:center}.intro-direct{width:100%;margin-top:10px;text-align:center}@media(max-width:760px){.script-panel{padding:0}.script-panel h2{font-size:25px}.script-panel textarea{min-height:160px}}`}</style>
     <header className="masthead"><a className="brand" href="/" aria-label="촬영 구도 실험실 처음으로"><span className="brand-icon" aria-hidden="true">◧</span><span>SHOT LAB<span className="brand-ko">촬영 구도 실험실</span></span></a><span className="edition">CAMERA STUDY <span>/</span> 001</span></header>
-    <section className={entered?'workspace':'intro'}>
-      <div className="heading"><div><p className="eyebrow">{entered?'THE CAMERA IS YOURS':'A SMALL STUDY OF PERSPECTIVE'}</p><h1>{entered?'카메라를 움직여 보세요.':<>같은 장면,<br/>다른 카메라.</>}</h1></div>{entered?<button className="text-button" onClick={()=>{setEntered(false);commit({...INITIAL});}}>소개로 돌아가기 ↗</button>:<p className="intro-copy">촬영을 처음 배우는 사람을 위한 작은 실험실.<br/>각도와 움직임만 바꿔도, 장면은 달라집니다.</p>}</div>
+    <section className={entered?'workspace':scriptPage?'script-page':'intro'}>
+      <div className="heading"><div><p className="eyebrow">{entered?'THE CAMERA IS YOURS':scriptPage?'SCRIPT TO SCENE / DEMO':'A SMALL STUDY OF PERSPECTIVE'}</p><h1>{entered?'카메라를 움직여 보세요.':scriptPage?'장면을 글로 써보세요.':<>같은 장면,<br/>다른 카메라.</>}</h1></div>{entered?<button className="text-button" onClick={openIntro}>소개로 돌아가기 ↗</button>:scriptPage?<button className="text-button" onClick={openIntro}>소개로 돌아가기 ↗</button>:<p className="intro-copy">촬영을 처음 배우는 사람을 위한 작은 실험실.<br/>각도와 움직임만 바꿔도, 장면은 달라집니다.</p>}</div>
       <div className="lab-grid">
         <section className="viewer" aria-label="촬영 장면">
           <div className="viewer-bar"><span>SCENE 01 <span className="bar-divider">/</span> 책 읽는 오후</span><span>{entered?status:'PREVIEW'}</span></div>
@@ -248,7 +255,7 @@ export default function Home(){
           </div>
           <p className="view-note">0.5x(광각) ↔ 3.0x(망원) · 휠 스크롤 또는 슬라이더로 조절</p>
           <div className="scene-note"><span className="eyebrow">ONE SCENE, MANY WAYS TO SEE</span><p>인물과 공간은 그대로.<br/>바뀌는 건 카메라뿐입니다.</p></div>
-        </aside>:<aside className="intro-panel"><span className="section-number">01 / CAMERA EXPERIMENT</span><h2>어디서,<br/>어떻게 바라볼까요?</h2><p>책을 읽는 인물과 작은 공간.<br/>카메라를 가까이, 멀리, 주변으로<br className="desktop-break"/> 움직이며 구도를 확인해 보세요.</p><div className="intro-tags"><span>고정 각도 4개</span><span>이동 촬영 9종</span><span>사이드 프레이밍</span><span>자유 시점 및 줌</span></div><button className="primary" disabled={!ready||!!error} onClick={()=>setEntered(true)}>촬영 방법 둘러보기 <span>↗</span></button><p className="intro-hint">직접 누르고, 돌려보며 이해하는 촬영</p></aside>}
+        </aside>:scriptPage?<aside className="script-panel"><div className="script-panel-label"><span className="section-number">02 / SCRIPT TO SCENE</span><span className="demo-badge">DEMO · AI 없음</span></div><h2>텍스트가 장면이 되는<br/>과정을 미리 봅니다.</h2><p className="script-help">짧은 촬영 스크립트를 적어 보세요. 실제 AI 대신 준비된 3D 장면을 연결해 보여주는 시연 버전입니다.</p><label className="script-label" htmlFor="script-input">촬영 스크립트</label><textarea id="script-input" value={scriptText} onChange={e=>setScriptText(e.target.value)} spellCheck="false"/><div className="script-meta"><span>{scriptText.length}자</span><span>장면 01 · 인물</span></div><button className="primary" disabled={!ready||!!error||!scriptText.trim()||demoLoading} onClick={drawDemo}>{demoLoading?'3D 장면을 준비하는 중…':'AI 장면 그리기 (데모)'} <span>{demoLoading?'…':'↗'}</span></button><button className="text-button script-back" onClick={openIntro}>스크립트 없이 바로 둘러보기</button></aside>:<aside className="intro-panel"><span className="section-number">01 / CAMERA EXPERIMENT</span><h2>어디서,<br/>어떻게 바라볼까요?</h2><p>책을 읽는 인물과 작은 공간.<br/>카메라를 가까이, 멀리, 주변으로<br className="desktop-break"/> 움직이며 구도를 확인해 보세요.</p><div className="intro-tags"><span>고정 각도 4개</span><span>이동 촬영 9종</span><span>스크립트 → 3D 데모</span></div><button className="primary" disabled={!ready||!!error} onClick={openScript}>스크립트로 장면 만들기 <span>↗</span></button><button className="text-button intro-direct" disabled={!ready||!!error} onClick={()=>setEntered(true)}>준비된 장면 바로 둘러보기 ↗</button><p className="intro-hint">직접 누르고, 돌려보며 이해하는 촬영</p></aside>}
       </div>
     </section>
     <footer><span>가상 장면 · 구도 이해를 위한 시연용 애니메이션</span><span>SHOT LAB / 첫 번째 장면</span></footer>
