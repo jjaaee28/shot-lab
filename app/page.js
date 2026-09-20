@@ -200,10 +200,10 @@ export default function Home(){
         </section>
         {entered?<aside className="controls">
           <div className="control-heading"><span className="section-number">01</span><h2>촬영 방법</h2><span className="control-count">{METHODS.length} METHODS</span></div>
-          <div className="methods">{METHODS.map((m,i)=><button disabled={!ready||!!error} key={m.id} aria-pressed={view.method===m.id} className={`method ${view.method===m.id?'selected':''}`} onClick={()=>chooseMethod(m.id)}><span className="method-glyph" aria-hidden="true">{m.glyph}</span><span><strong>{m.name}</strong><small>{m.english}</small></span><span className="method-end">{view.method===m.id?'✓':(i+1).toString().padStart(2,'0')}</span></button>)}</div>
-          <div className="method-description-box">
-            <p className="method-description">{method.description}</p>
-          </div>
+          <div className="methods">{METHODS.map((m,i)=><div className="method-item" key={m.id}>
+            <button disabled={!ready||!!error} aria-pressed={view.method===m.id} className={`method ${view.method===m.id?'selected':''}`} onClick={()=>chooseMethod(m.id)}><span className="method-glyph" aria-hidden="true">{m.glyph}</span><span><strong>{m.name}</strong><small>{m.english}</small></span><span className="method-end">{view.method===m.id?'✓':(i+1).toString().padStart(2,'0')}</span></button>
+            {view.method===m.id&&<div className="method-description-box" aria-live="polite"><p className="method-description">{m.description}</p></div>}
+          </div>)}</div>
           <div className="control-heading preset-heading"><span className="section-number">02</span><h2>시작 각도</h2></div>
           <div className="presets">{PRESETS.map(p=><button disabled={!ready||!!error} key={p.id} aria-pressed={view.preset===p.id} className={view.preset===p.id?'selected':''} onClick={()=>choosePreset(p)}>{p.name}</button>)}</div>
           <p className="view-note">{preset?preset.name:'직접 설정한 방향'} · 360° 및 상하 각도 조절 가능</p>
