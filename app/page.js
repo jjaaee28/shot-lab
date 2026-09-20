@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { buildScene, cameraPose, METHODS, PRESETS } from './scene';
 
-const INITIAL={method:'fixed',angle:0,elevation:0,zoom:1.0,panX:0,guide:false,progress:0,playing:false,preset:'front',adjusted:false};
+const INITIAL={method:'fixed',angle:0,elevation:0,zoom:1.0,panX:0,panY:0,guide:false,progress:0,playing:false,preset:'front',adjusted:false};
 export default function Home(){
   const [entered,setEntered]=useState(false);
   const [view,setView]=useState({...INITIAL});
@@ -82,7 +82,8 @@ export default function Home(){
         const forward=new THREE.Vector3().subVectors(baseTarget,basePos).normalize();
         const up=new THREE.Vector3(0,1,0);
         const right=new THREE.Vector3().crossVectors(forward,up).normalize();
-        const panOffset=right.multiplyScalar(s.panX||0);
+        const screenUp=new THREE.Vector3().crossVectors(right,forward).normalize();
+        const panOffset=right.multiplyScalar(s.panX||0).add(screenUp.multiplyScalar(s.panY||0));
         camera.position.copy(basePos.clone().add(panOffset));
         camera.lookAt(baseTarget.clone().add(panOffset));
         const targetZoom=s.zoom||1.0;
@@ -142,8 +143,9 @@ export default function Home(){
       try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}
     }
     if(d.type==='pan'){
-      const nextPan=Math.max(-1.6,Math.min(1.6,(state.current.panX||0)-dx*0.005));
-      commit({panX:Math.round(nextPan*100)/100});
+      const nextPanX=Math.max(-1.6,Math.min(1.6,(state.current.panX||0)-dx*0.005));
+      const nextPanY=Math.max(-1.2,Math.min(1.2,(state.current.panY||0)+dy*0.005));
+      commit({panX:Math.round(nextPanX*100)/100,panY:Math.round(nextPanY*100)/100});
     }else{
       turn(-dx*.008,-dy*.006);
     }
@@ -161,7 +163,9 @@ export default function Home(){
   const pose=cameraPose(view.method,view.progress,view.angle,view.elevation);
   const degrees=((pose.angle*180/Math.PI)%360+360)%360;
   const livePitchDeg=Math.round((pose.elevation??view.elevation)*180/Math.PI);
-  const framingLabel=Math.abs(view.panX||0)<0.2?'중앙':(view.panX||0)>0?'좌측 1/3':'우측 1/3';
+  const horizontalFraming=Math.abs(view.panX||0)<0.2?'중앙':(view.panX||0)>0?'좌측 1/3':'우측 1/3';
+  const verticalFraming=Math.abs(view.panY||0)<0.15?'중앙':(view.panY||0)<0?'상단 1/3':'하단 1/3';
+  const framingLabel=`${horizontalFraming} · ${verticalFraming}`;
   const preset=PRESETS.find(p=>p.id===view.preset);
   const status=view.method==='fixed'?'고정 구도':view.adjusted?'방향 설정됨':view.playing?'재생 중':view.progress>=1?'재생 완료':'일시정지';
   return <main>
@@ -171,7 +175,7 @@ export default function Home(){
       <div className="lab-grid">
         <section className="viewer" aria-label="촬영 장면">
           <div className="viewer-bar"><span>SCENE 01 <span className="bar-divider">/</span> 책 읽는 오후</span><span>{entered?status:'PREVIEW'}</span></div>
-          <div className="stage" ref={mount} tabIndex={entered?0:-1} role="group" aria-label="장면 조작. 좌클릭 회전, 우클릭 좌우 이동, 휠 줌" onContextMenu={e=>e.preventDefault()} onKeyDown={e=>{if(entered&&ready&&!error){if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();turn(e.key==='ArrowLeft'?-.1:.1,0);}else if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();turn(0,e.key==='ArrowUp'?.05:-.05);}}}} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
+          <div className="stage" ref={mount} tabIndex={entered?0:-1} role="group" aria-label="장면 조작. 좌클릭 회전, 우클릭 상하좌우 프레이밍 이동, 휠 줌" onContextMenu={e=>e.preventDefault()} onKeyDown={e=>{if(entered&&ready&&!error){if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();turn(e.key==='ArrowLeft'?-.1:.1,0);}else if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();turn(0,e.key==='ArrowUp'?.05:-.05);}}}} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
             <span className="frame-corner tl"/><span className="frame-corner tr"/><span className="frame-corner bl"/><span className="frame-corner br"/>
             {view.guide&&(
               <div className="stage-grid-guide" aria-hidden="true">
@@ -191,7 +195,7 @@ export default function Home(){
             )}
             {(!ready||error)&&<div className="stage-notice" role={error?'alert':'status'}><p>{error||'장면을 준비하고 있어요.'}</p>{error&&<button onClick={()=>setRetry(r=>r+1)}>다시 불러오기</button>}</div>}
           </div>
-          <div className="viewer-caption"><span>{entered?'↔ ↕ 회전 · 우클릭 좌우 이동 · 휠 줌':'의자에 앉아 책을 읽는 인물'}</span><span className="mono">{entered?`${Math.round(degrees)}° / ${livePitchDeg>=0?'+':''}${livePitchDeg}° · ${framingLabel} · ${(view.zoom||1.0).toFixed(1)}x`:'16 : 9'}</span></div>
+          <div className="viewer-caption"><span>{entered?'↔ ↕ 회전 · 우클릭 상하좌우 이동 · 휠 줌':'의자에 앉아 책을 읽는 인물'}</span><span className="mono">{entered?`${Math.round(degrees)}° / ${livePitchDeg>=0?'+':''}${livePitchDeg}° · ${framingLabel} · ${(view.zoom||1.0).toFixed(1)}x`:'16 : 9'}</span></div>
           {entered&&<div className="transport"><div className="transport-top"><span className="status" role="status">{status}</span><span className="mono">{method.duration?`${(view.progress*method.duration).toFixed(1)} / ${method.duration.toFixed(1)} s`:'— / —'}</span></div><div className="progress" role="progressbar" aria-label="촬영 재생 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(view.progress*100)}><span style={{width:`${view.progress*100}%`}}/></div>{method.duration>0?<div className="play-controls"><button disabled={!ready||!!error} onClick={()=>view.progress>=1||view.adjusted?restart():commit({playing:!view.playing})}>{view.playing?'Ⅱ 일시정지':view.adjusted?'▷ 이 방향에서 재생':view.progress>=1?'▷ 다시 재생':'▷ 계속 재생'}</button><button disabled={!ready||!!error} className="text-button" onClick={restart}>↺ 처음부터</button></div>:<p className="fixed-note">카메라는 멈춰 있어요. 다른 각도를 선택하거나 장면을 돌려보세요.</p>}</div>}
         </section>
         {entered?<aside className="controls">
@@ -204,6 +208,7 @@ export default function Home(){
           <div className="presets">{PRESETS.map(p=><button disabled={!ready||!!error} key={p.id} aria-pressed={view.preset===p.id} className={view.preset===p.id?'selected':''} onClick={()=>choosePreset(p)}>{p.name}</button>)}</div>
           <p className="view-note">{preset?preset.name:'직접 설정한 방향'} · 360° 및 상하 각도 조절 가능</p>
           <div className="control-heading preset-heading"><span className="section-number">03</span><h2>인물 프레이밍</h2><span className="control-count">{framingLabel}</span></div>
+          <p className="framing-axis">가로 위치</p>
           <div className="framing-presets">
             <button type="button" className={(view.panX||0)>0.5?'selected':''} onClick={()=>commit({panX:1.1})}>좌측 1/3</button>
             <button type="button" className={Math.abs(view.panX||0)<=0.5?'selected':''} onClick={()=>commit({panX:0})}>중앙 배치</button>
@@ -213,9 +218,20 @@ export default function Home(){
             <span className="framing-side-label">좌측</span>
             <input type="range" min="-1.6" max="1.6" step="0.1" value={view.panX||0} onChange={e=>commit({panX:parseFloat(e.target.value)})} aria-label="인물 화면 위치 슬라이더" />
             <span className="framing-side-label">우측</span>
-            <button type="button" className="zoom-reset" disabled={!view.panX} onClick={()=>commit({panX:0})} title="중앙 초기화">중앙</button>
           </div>
-          <p className="view-note">카메라 수평 이동: 인물을 화면 사이드(좌/우)에 배치하여 시선 공간 연출</p>
+          <p className="framing-axis">세로 위치</p>
+          <div className="framing-presets">
+            <button type="button" className={(view.panY||0)<-0.35?'selected':''} onClick={()=>commit({panY:-0.75})}>상단 1/3</button>
+            <button type="button" className={Math.abs(view.panY||0)<=0.35?'selected':''} onClick={()=>commit({panY:0})}>중앙 배치</button>
+            <button type="button" className={(view.panY||0)>0.35?'selected':''} onClick={()=>commit({panY:0.75})}>하단 1/3</button>
+          </div>
+          <div className="framing-slider-box">
+            <span className="framing-side-label">상단</span>
+            <input type="range" min="-1.2" max="1.2" step="0.1" value={view.panY||0} onChange={e=>commit({panY:parseFloat(e.target.value)})} aria-label="인물 세로 위치 슬라이더" />
+            <span className="framing-side-label">하단</span>
+            <button type="button" className="zoom-reset" disabled={!view.panX&&!view.panY} onClick={()=>commit({panX:0,panY:0})} title="프레이밍 중앙 초기화">중앙</button>
+          </div>
+          <p className="view-note">우클릭 드래그 또는 슬라이더로 카메라를 상하좌우 이동해 인물을 원하는 위치에 배치합니다.</p>
           <div className="control-heading preset-heading"><span className="section-number">04</span><h2>카메라 줌</h2><span className="control-count mono">{(view.zoom||1.0).toFixed(1)}x</span></div>
           <div className="zoom-control-box">
             <div className="zoom-bar">
