@@ -44,7 +44,7 @@ export default function Home(){
   function restart(){const s=state.current;commit({angle:s.adjusted?cameraPose(s.method,s.progress,s.angle,s.elevation).angle:s.angle,progress:0,playing:true,adjusted:false});}
   function openScript(){setEntered(false);setScriptPage(true);}
   function openIntro(){setEntered(false);setScriptPage(false);commit({...INITIAL});}
-  function drawDemo(){setDemoLoading(true);window.setTimeout(()=>{setDemoLoading(false);setScriptPage(false);setEntered(true);commit({...INITIAL,method:'orbit_right',playing:true});},700);}
+  function drawDemo(){setDemoLoading(true);window.setTimeout(()=>{setDemoLoading(false);setScriptPage(false);setEntered(true);commit({...INITIAL,method:'fixed',playing:false});},700);}
   useEffect(()=>{
     const context=document.modelContext;
     if(!context?.registerTool)return;
