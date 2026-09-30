@@ -2,10 +2,18 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { buildScene, cameraPose, METHODS, PRESETS } from './scene';
+import { createClient } from '../lib/supabase';
 
 const INITIAL={method:'fixed',angle:0,elevation:0,zoom:1.0,panX:0,panY:0,guide:false,progress:0,playing:false,preset:'front',adjusted:false};
 const DEMO_DATE='2026. 09. 20.';
 export default function Home(){
+  const supabase = createClient();
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
   const [loginPage,setLoginPage]=useState(true);
   const [entered,setEntered]=useState(false);
   const [scriptPage,setScriptPage]=useState(false);
@@ -14,13 +22,7 @@ export default function Home(){
   const [editingShotTitle,setEditingShotTitle]=useState('');
   const [saveFeedback,setSaveFeedback]=useState('');
   const [showControlsHint,setShowControlsHint]=useState(true);
-  const [savedShots,setSavedShots]=useState([
-    {id:'sample-static',title:'창가의 정면',method:'fixed',date:DEMO_DATE,angle:0,elevation:0,zoom:1,panX:0,panY:0,preset:'front'},
-    {id:'sample-arc',title:'인물을 도는 시선',method:'orbit_right',date:DEMO_DATE,angle:Math.PI/2,elevation:0,zoom:1.2,panX:0,panY:0,preset:'side'},
-    {id:'sample-dolly',title:'책장으로 다가가기',method:'in',date:DEMO_DATE,angle:0,elevation:0,zoom:1.5,panX:0.5,panY:0,preset:'front'},
-    {id:'sample-tilt',title:'시선을 올려 보는 순간',method:'tilt_up',date:DEMO_DATE,angle:Math.PI/2,elevation:0.2,zoom:1,panX:0,panY:-0.4,preset:'side'},
-    {id:'sample-low',title:'낮은 시선의 독서',method:'fixed',date:DEMO_DATE,angle:0,elevation:-0.12,zoom:1.2,panX:-0.5,panY:0.5,preset:'low'}
-  ]);
+  const [savedShots,setSavedShots]=useState([]);
   const [scriptText,setScriptText]=useState('INT. 작은 방 - 오후\n\n창가에 앉은 인물이 책장을 넘긴다.\n카메라는 인물의 옆을 천천히 지나간다.');
   const [demoLoading,setDemoLoading]=useState(false);
   const [view,setView]=useState({...INITIAL});
@@ -60,15 +62,75 @@ export default function Home(){
   function seekProgress(e){const rect=e.currentTarget.getBoundingClientRect();const progress=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));commit({progress,playing:false});}
   function openScript(){setLibraryPage(false);setEntered(false);setScriptPage(true);}
   function openIntro(){setLibraryPage(false);setEntered(false);setScriptPage(false);commit({...INITIAL});}
-  function demoLogin(e){e.preventDefault();setLoginPage(false);setEntered(false);setScriptPage(false);commit({...INITIAL});}
+  async function demoLogin(e){
+    e.preventDefault();
+    setAuthLoading(true); setAuthError('');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if(error){ setAuthError(error.message); }
+    else { setLoginPage(false); setEntered(false); setScriptPage(false); commit({...INITIAL}); }
+    setAuthLoading(false);
+  }
+  async function demoSignup(e){
+    e.preventDefault();
+    setAuthLoading(true); setAuthError('');
+    const { error } = await supabase.auth.signUp({ email, password });
+    if(error){ setAuthError(error.message); }
+    else { setAuthError('가입 성공! 이제 로그인 버튼을 눌러주세요.'); }
+    setAuthLoading(false);
+  }
+  async function handleLogout(){
+    await supabase.auth.signOut();
+    setLoginPage(true); setEntered(false); setLibraryPage(false);
+  }
   function drawDemo(){setDemoLoading(true);window.setTimeout(()=>{setDemoLoading(false);setScriptPage(false);setEntered(true);commit({...INITIAL,method:'fixed',playing:false});},700);}
   function openLibrary(){setLoginPage(false);setScriptPage(false);setEntered(true);setLibraryPage(true);}
   function closeLibrary(){setLibraryPage(false);setEntered(true);}
-  function saveCurrentShot(){const s=state.current;const m=METHODS.find(item=>item.id===s.method);setSavedShots(prev=>{const count=prev.length+1;setSaveFeedback(`저장됨 · ${count}개`);window.setTimeout(()=>setSaveFeedback(''),2200);return [{id:`shot-${Date.now()}`,title:`${m?.name||'저장한 구도'} · ${count}`,method:s.method,date:DEMO_DATE,angle:s.angle,elevation:s.elevation,zoom:s.zoom,panX:s.panX,panY:s.panY,preset:s.preset},...prev];});}
-  function loadShot(shot){setLibraryPage(false);setEntered(true);commit({method:shot.method,angle:shot.angle,elevation:shot.elevation,zoom:shot.zoom,panX:shot.panX,panY:shot.panY,preset:shot.preset,progress:0,playing:false,adjusted:false});}
+  async function saveCurrentShot(){
+    if(!user){ setSaveFeedback('로그인 필요'); return; }
+    const s=state.current;const m=METHODS.find(item=>item.id===s.method);
+    const count=savedShots.length+1; const title=`${m?.name||'저장한 구도'} · ${count}`;
+    const { data, error } = await supabase.from('saved_shots').insert([{ user_id: user.id, title, method: s.method, angle: s.angle, elevation: s.elevation, zoom: s.zoom, pan_x: s.panX||0 }]).select().single();
+    if(error){ setSaveFeedback('저장 실패'); console.error(error); }
+    else{
+      setSaveFeedback(`저장됨 · ${count}개`);
+      setSavedShots(prev=>[{id:data.id,title:data.title,method:data.method,date:new Date(data.created_at).toLocaleDateString(),angle:data.angle,elevation:data.elevation,zoom:data.zoom,panX:data.pan_x,panY:0,preset:s.preset||'custom'},...prev]);
+    }
+    window.setTimeout(()=>setSaveFeedback(''),2200);
+  }
+  function loadShot(shot){setLibraryPage(false);setEntered(true);commit({method:shot.method,angle:shot.angle,elevation:shot.elevation,zoom:shot.zoom,panX:shot.panX,panY:shot.panY,preset:shot.preset||'custom',progress:0,playing:false,adjusted:false});}
   function startRename(shot){setEditingShotId(shot.id);setEditingShotTitle(shot.title);}
-  function finishRename(){const title=editingShotTitle.trim();if(title)setSavedShots(prev=>prev.map(shot=>shot.id===editingShotId?{...shot,title}:shot));setEditingShotId(null);setEditingShotTitle('');}
-  function removeShot(id){setSavedShots(prev=>prev.filter(shot=>shot.id!==id));if(editingShotId===id){setEditingShotId(null);setEditingShotTitle('');}}
+  async function finishRename(){
+    const title=editingShotTitle.trim();
+    if(title){
+      await supabase.from('saved_shots').update({title}).eq('id',editingShotId);
+      setSavedShots(prev=>prev.map(shot=>shot.id===editingShotId?{...shot,title}:shot));
+    }
+    setEditingShotId(null);setEditingShotTitle('');
+  }
+  async function removeShot(id){
+    await supabase.from('saved_shots').delete().eq('id',id);
+    setSavedShots(prev=>prev.filter(shot=>shot.id!==id));
+    if(editingShotId===id){setEditingShotId(null);setEditingShotTitle('');}
+  }
+
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{
+      setUser(session?.user??null);
+      if(session?.user){ setLoginPage(false); fetchSavedShots(session.user.id); }
+    });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_event,session)=>{
+      setUser(session?.user??null);
+      if(session?.user){ fetchSavedShots(session.user.id); }
+      else { setSavedShots([]); }
+    });
+    return ()=>subscription.unsubscribe();
+  },[]);
+  async function fetchSavedShots(userId){
+    const {data,error} = await supabase.from('saved_shots').select('*').eq('user_id',userId).order('created_at',{ascending:false});
+    if(data){
+      setSavedShots(data.map(row=>({id:row.id,title:row.title,method:row.method,date:new Date(row.created_at).toLocaleDateString(),angle:row.angle,elevation:row.elevation,zoom:row.zoom,panX:row.pan_x,panY:0,preset:'custom'})));
+    }
+  }
   useEffect(()=>{
     const context=document.modelContext;
     if(!context?.registerTool)return;
@@ -240,7 +302,7 @@ export default function Home(){
           <div className="viewer-caption"><span>{entered?'↔ ↕ 회전 · 우클릭 상하좌우 이동 · 휠 줌':'의자에 앉아 책을 읽는 인물'}</span><span className="mono">{entered?`${Math.round(degrees)}° / ${livePitchDeg>=0?'+':''}${livePitchDeg}° · ${framingLabel} · ${(view.zoom||1.0).toFixed(1)}x`:'16 : 9'}</span></div>
           {entered&&<div className="transport"><div className="transport-top"><span className="status" role="status">{status}</span><span className="mono">{method.duration?`${(view.progress*method.duration).toFixed(1)} / ${method.duration.toFixed(1)} s`:'— / —'}</span></div><div className="progress" role="progressbar" aria-label="촬영 재생 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(view.progress*100)} onPointerDown={e=>{progressDrag.current=true;e.currentTarget.setPointerCapture(e.pointerId);seekProgress(e)}} onPointerMove={e=>{if(progressDrag.current)seekProgress(e)}} onPointerUp={e=>{progressDrag.current=false;e.currentTarget.releasePointerCapture?.(e.pointerId)}} onPointerCancel={()=>{progressDrag.current=false}}><span style={{width:`${view.progress*100}%`}}/></div>{method.duration>0?<div className="play-controls"><button disabled={!ready||!!error} onClick={()=>view.progress>=1||view.adjusted?restart():commit({playing:!view.playing})}>{view.playing?'Ⅱ 일시정지':view.adjusted?'▷ 이 방향에서 재생':view.progress>=1?'▷ 다시 재생':'▷ 계속 재생'}</button><button disabled={!ready||!!error} className="text-button" onClick={restart}>↺ 처음부터</button></div>:<p className="fixed-note">카메라는 멈춰 있어요. 다른 각도를 선택하거나 장면을 돌려보세요.</p>}</div>}
         </section>
-        {loginPage?<aside className="login-panel"><span className="section-number">01 / DEMO LOGIN</span><h2>장면 실험을<br/>시작해 보세요.</h2><p className="login-help">촬영 방법을 직접 눌러보고, 같은 장면이 어떻게 달라지는지 확인할 수 있습니다.</p><form className="login-form" onSubmit={demoLogin}><label className="login-label" htmlFor="login-email">이메일</label><input className="login-input" id="login-email" type="email" placeholder="you@example.com" autoComplete="email"/><label className="login-label" htmlFor="login-password">비밀번호</label><input className="login-input" id="login-password" type="password" placeholder="••••••••" autoComplete="current-password"/><button className="primary" type="submit">로그인 (데모) <span>↗</span></button></form><p className="login-demo-note">이 화면은 목업 시연용입니다. 입력한 정보는 저장되거나 확인되지 않습니다.</p><button className="text-button login-skip" type="button" onClick={()=>setLoginPage(false)}>로그인 없이 둘러보기</button><button className="text-button login-skip login-secondary" type="button">회원가입</button></aside>:libraryPage?<aside className="library-panel"><div className="script-panel-label"><span className="section-number">05 / SHOT LIBRARY</span><span className="demo-badge">LOCAL DEMO</span></div><h2>촬영 구도 저장소</h2><p className="library-help">마음에 든 구도를 저장하고 다시 불러오세요. 이 목업에서는 현재 화면 안에서만 유지됩니다.</p><button className="primary save-shot-button" type="button" onClick={saveCurrentShot}>현재 구도 저장 <span>＋</span></button><span className="save-feedback" role="status">{saveFeedback||`저장된 구도 ${savedShots.length}개`}</span><div className="saved-shot-list">{savedShots.map((shot,i)=>{const m=METHODS.find(item=>item.id===shot.method);const deg=Math.round((((shot.angle*180/Math.PI)%360)+360)%360);return <div className="saved-shot-card" key={shot.id}><button className="saved-shot-main" type="button" onClick={()=>loadShot(shot)}><span className="saved-shot-index">{String(i+1).padStart(2,'0')}</span><span>{editingShotId===shot.id?<input className="saved-shot-title-input" value={editingShotTitle} onChange={e=>setEditingShotTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')finishRename();if(e.key==='Escape'){setEditingShotId(null);setEditingShotTitle('');}}} onClick={e=>e.stopPropagation()} autoFocus/>:<><strong>{shot.title}</strong><small>{m?.name||'촬영'} · {shot.date||DEMO_DATE}<br/>{m?.english||'SHOT'} · {deg}° · {shot.zoom.toFixed(1)}x</small></>}</span></button><span className="saved-shot-actions"><button type="button" onClick={()=>editingShotId===shot.id?finishRename():startRename(shot)}>{editingShotId===shot.id?'저장':'이름 변경'}</button><button type="button" onClick={()=>removeShot(shot.id)}>삭제</button></span></div>})}</div></aside>:entered?<aside className="controls">
+        {loginPage?<aside className="login-panel"><span className="section-number">01 / ACCOUNT</span><h2>장면 실험을<br/>시작해 보세요.</h2><p className="login-help">로그인하여 마음에 드는 카메라 구도를 저장하고 언제든 다시 불러오세요.</p><form className="login-form"><label className="login-label" htmlFor="login-email">이메일</label><input className="login-input" id="login-email" type="email" placeholder="you@example.com" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/><label className="login-label" htmlFor="login-password">비밀번호</label><input className="login-input" id="login-password" type="password" placeholder="••••••••" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/>{authError&&<p style={{color:'red',fontSize:'12px',margin:0}}>{authError}</p>}<div style={{display:'flex',gap:'8px',marginTop:'4px'}}><button className="primary" style={{flex:1}} type="submit" onClick={demoLogin} disabled={authLoading}>로그인 <span>↗</span></button><button className="primary" style={{flex:1,background:'transparent',color:'var(--ink)'}} type="button" onClick={demoSignup} disabled={authLoading}>회원가입 <span>↗</span></button></div></form><p className="login-demo-note">안전한 데이터 저장을 위해 Supabase와 연동됩니다.</p><button className="text-button login-skip" type="button" onClick={()=>setLoginPage(false)}>로그인 없이 둘러보기</button></aside>:libraryPage?<aside className="library-panel"><div className="script-panel-label"><span className="section-number">05 / SHOT LIBRARY</span><span className="demo-badge">SUPABASE</span></div><h2>촬영 구도 저장소</h2><p className="library-help">{user?`${user.email}님의 저장소입니다.`:'로그인하면 저장소를 이용할 수 있습니다.'}</p>{user&&<button className="text-button" style={{marginBottom:'16px'}} onClick={handleLogout}>로그아웃</button>}<button className="primary save-shot-button" type="button" onClick={saveCurrentShot}>현재 구도 저장 <span>＋</span></button><span className="save-feedback" role="status">{saveFeedback||`저장된 구도 ${savedShots.length}개`}</span><div className="saved-shot-list">{savedShots.map((shot,i)=>{const m=METHODS.find(item=>item.id===shot.method);const deg=Math.round((((shot.angle*180/Math.PI)%360)+360)%360);return <div className="saved-shot-card" key={shot.id}><button className="saved-shot-main" type="button" onClick={()=>loadShot(shot)}><span className="saved-shot-index">{String(i+1).padStart(2,'0')}</span><span>{editingShotId===shot.id?<input className="saved-shot-title-input" value={editingShotTitle} onChange={e=>setEditingShotTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')finishRename();if(e.key==='Escape'){setEditingShotId(null);setEditingShotTitle('');}}} onClick={e=>e.stopPropagation()} autoFocus/>:<><strong>{shot.title}</strong><small>{m?.name||'촬영'} · {shot.date||DEMO_DATE}<br/>{m?.english||'SHOT'} · {deg}° · {shot.zoom.toFixed(1)}x</small></>}</span></button><span className="saved-shot-actions"><button type="button" onClick={()=>editingShotId===shot.id?finishRename():startRename(shot)}>{editingShotId===shot.id?'저장':'이름 변경'}</button><button type="button" onClick={()=>removeShot(shot.id)}>삭제</button></span></div>})}</div></aside>:entered?<aside className="controls">
           <div className="control-heading"><span className="section-number">01</span><h2>촬영 방법</h2><span className="control-count">{METHODS.length} METHODS</span></div>
           <div className="methods">{METHODS.map((m,i)=><div className="method-item" key={m.id}>
             <button disabled={!ready||!!error} aria-pressed={view.method===m.id} className={`method ${view.method===m.id?'selected':''}`} onClick={()=>chooseMethod(m.id)}><span className="method-glyph" aria-hidden="true">{m.glyph}</span><span><strong>{m.name}</strong><small>{m.english}</small></span><span className="method-end">{view.method===m.id?'✓':(i+1).toString().padStart(2,'0')}</span></button>

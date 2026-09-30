@@ -7,5 +7,12 @@
     "build": "next build",
     "start": "next start --hostname 127.0.0.1"
   },
-  "dependencies": { "next": "latest", "react": "latest", "react-dom": "latest", "three": "latest" }
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "three": "latest"
+  }
 }
